@@ -12,6 +12,7 @@ import 'package:image_picker/image_picker.dart';
 import '../Login Pages/student_login.dart';
 import '../Dashboard/student_assignment_page.dart';
 import '../Chat/student_message_page.dart';
+import 'student_progress_page.dart';
 
 
 
@@ -230,7 +231,10 @@ class _StudentDashboardPageState extends State<StudentDashboardPage>
             // Navigate to Rewards Page
           }),
           _buildDrawerItem(Icons.insights, 'Progress', () {
-            // Navigate to Progress Page
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => StudentProgressPage()),
+            );
           }),
           _buildDrawerItem(Icons.book, 'Enrolled Courses', () {
             Navigator.push(

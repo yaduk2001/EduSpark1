@@ -9,6 +9,9 @@ import 'report_page.dart';
 import 'package:eduspark/Admin/AdminCourseCreationPage.dart';
 import 'package:eduspark/Admin/AdminCourseEditPage.dart';
 import 'package:eduspark/Chat/chat_page.dart';
+import 'package:eduspark/CollaborativeLearning/collaborative_learning_page.dart';
+import 'package:eduspark/DiscussionForums/discussion_forums_page.dart';
+import 'package:eduspark/ActivityDetails/activity_details_page.dart';
 
 
 
@@ -458,8 +461,35 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
                         );
                       },
                     ),
+                    _buildDashboardCard(
+                      'Collaborative Learning',
+                      Icons.groups,
+                      () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => CollaborativeLearningPage(),
+                          ),
+                        );
+                      },
+                    ),
+                    _buildDashboardCard(
+                      'Discussion Forums',
+                      Icons.forum,
+                      () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => DiscussionForumsPage(),
+                          ),
+                        );
+                      },
+                    ),
                   ],
                 ),
+
+                // Add this new section above the analytics summary
+                _buildCollaborativeSection(),
               ],
             ),
           ),
@@ -643,6 +673,168 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildCollaborativeSection() {
+    return Card(
+      elevation: 4,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(15),
+      ),
+      child: Padding(
+        padding: EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Collaborative Activities',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF1976D2),
+                  ),
+                ),
+                IconButton(
+                  icon: Icon(Icons.add_circle, color: Color(0xFF1976D2)),
+                  onPressed: () {
+                    _showCreateActivityDialog();
+                  },
+                ),
+              ],
+            ),
+            SizedBox(height: 16),
+            StreamBuilder<QuerySnapshot>(
+              stream: FirebaseFirestore.instance
+                  .collection('collaborative_activities')
+                  .where('teacherId', isEqualTo: currentUser?.uid)
+                  .orderBy('createdAt', descending: true)
+                  .limit(3)
+                  .snapshots(),
+              builder: (context, snapshot) {
+                if (snapshot.hasError) {
+                  return Text('Error loading activities');
+                }
+
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return Center(child: CircularProgressIndicator());
+                }
+
+                var activities = snapshot.data?.docs ?? [];
+
+                return Column(
+                  children: activities.map((activity) {
+                    var data = activity.data() as Map<String, dynamic>;
+                    return ListTile(
+                      leading: Icon(_getActivityIcon(data['type'])),
+                      title: Text(data['title'] ?? 'Untitled Activity'),
+                      subtitle: Text(data['description'] ?? ''),
+                      trailing: Text(
+                        '${data['participants']?.length ?? 0} participants',
+                        style: TextStyle(color: Colors.grey[600]),
+                      ),
+                      onTap: () => _showActivityDetails(activity.id, data),
+                    );
+                  }).toList(),
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  IconData _getActivityIcon(String? type) {
+    switch (type) {
+      case 'group_discussion':
+        return Icons.groups;
+      case 'peer_review':
+        return Icons.rate_review;
+      case 'team_project':
+        return Icons.engineering;
+      default:
+        return Icons.circle;
+    }
+  }
+
+  void _showCreateActivityDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Create Collaborative Activity'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                decoration: InputDecoration(labelText: 'Activity Title'),
+                onChanged: (value) {
+                  // Store title
+                },
+              ),
+              SizedBox(height: 16),
+              TextField(
+                decoration: InputDecoration(labelText: 'Description'),
+                maxLines: 3,
+                onChanged: (value) {
+                  // Store description
+                },
+              ),
+              SizedBox(height: 16),
+              DropdownButtonFormField<String>(
+                decoration: InputDecoration(labelText: 'Activity Type'),
+                items: [
+                  DropdownMenuItem(
+                    value: 'group_discussion',
+                    child: Text('Group Discussion'),
+                  ),
+                  DropdownMenuItem(
+                    value: 'peer_review',
+                    child: Text('Peer Review'),
+                  ),
+                  DropdownMenuItem(
+                    value: 'team_project',
+                    child: Text('Team Project'),
+                  ),
+                ],
+                onChanged: (value) {
+                  // Store activity type
+                },
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              // Create activity in Firestore
+              Navigator.pop(context);
+            },
+            child: Text('Create'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showActivityDetails(String activityId, Map<String, dynamic> data) {
+    // Navigate to detailed activity page or show modal
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ActivityDetailsPage(
+          activityId: activityId,
+          activityData: data,
+        ),
       ),
     );
   }

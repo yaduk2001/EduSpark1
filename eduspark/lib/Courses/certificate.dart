@@ -27,32 +27,83 @@ class _CertificatePageState extends State<CertificatePage> {
   }
 
   Future<void> _fetchCertificateData() async {
-    // Fetch certificate data from Firestore
-    DocumentSnapshot snapshot = await FirebaseFirestore.instance
-        .collection('certificate')
-        .doc(widget.userID)
-        .get();
+    try {
+      // Fetch user data to get the full name
+      DocumentSnapshot userSnapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(widget.userID)
+          .get();
 
-    if (snapshot.exists) {
-      var certificateData = snapshot.data() as Map<String, dynamic>;
-      setState(() {
-        certificateLink = "https://firebasestorage.googleapis.com/v0/b/eduspark-a0562.appspot.com/o/Certificate.pdf?alt=media&token=77e8b507-dcf8-4131-bad1-ab1f086743ee"; // Example PDF link
-        userName = certificateData['userName'] ?? 'User';
-      });
-      await _loadPDF(certificateLink!);  // Load the PDF directly for viewing
+      // Fetch certificate data
+      DocumentSnapshot certSnapshot = await FirebaseFirestore.instance
+          .collection('certificate')
+          .doc(widget.userID)
+          .get();
+
+      if (userSnapshot.exists) {
+        var userData = userSnapshot.data() as Map<String, dynamic>;
+        String fullName = userData['fullName'] ?? 'User';
+        
+        // Create or update certificate document
+        await FirebaseFirestore.instance
+            .collection('certificate')
+            .doc(widget.userID)
+            .set({
+          'userName': fullName,
+          'courseName': widget.courseName,
+          'dateIssued': DateTime.now(),
+        }, SetOptions(merge: true));
+
+        setState(() {
+          userName = fullName;
+          certificateLink = "https://firebasestorage.googleapis.com/v0/b/eduspark-a0562.appspot.com/o/Certificate.pdf?alt=media&token=77e8b507-dcf8-4131-bad1-ab1f086743ee";
+        });
+
+        if (certificateLink != null) {
+          await _loadPDF(certificateLink!);
+        }
+      }
+    } catch (e) {
+      print('Error fetching certificate data: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error generating certificate')),
+      );
     }
   }
 
   Future<void> _loadPDF(String pdfUrl) async {
-    // Download the PDF to a local file and display it
-    final response = await http.get(Uri.parse(pdfUrl));
-    final tempDir = await getTemporaryDirectory();
-    final file = File('${tempDir.path}/certificate.pdf');
-    await file.writeAsBytes(response.bodyBytes);
+    try {
+      // Download the PDF to a local file and display it
+      final response = await http.get(Uri.parse(pdfUrl));
+      
+      if (response.statusCode != 200) {
+        print('PDF download failed with status: ${response.statusCode}');
+        throw Exception('Failed to download PDF');
+      }
 
-    setState(() {
-      localFile = file;
-    });
+      final tempDir = await getTemporaryDirectory();
+      final file = File('${tempDir.path}/certificate.pdf');
+      await file.writeAsBytes(response.bodyBytes);
+
+      // Verify file exists and has content
+      if (!await file.exists() || await file.length() == 0) {
+        throw Exception('PDF file is empty or not created');
+      }
+
+      print('PDF saved to: ${file.path}');
+      print('PDF file size: ${await file.length()} bytes');
+
+      setState(() {
+        localFile = file;
+      });
+    } catch (e) {
+      print('Error loading PDF: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error loading certificate: ${e.toString()}')),
+        );
+      }
+    }
   }
 
   @override
@@ -70,9 +121,15 @@ class _CertificatePageState extends State<CertificatePage> {
               autoSpacing: false,
               pageFling: false,
               onError: (error) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Error loading PDF')),
-                );
+                print('PDF View Error: $error');
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Error displaying PDF: $error')),
+                  );
+                }
+              },
+              onPageError: (page, error) {
+                print('PDF Page $page Error: $error');
               },
             ),
     );
